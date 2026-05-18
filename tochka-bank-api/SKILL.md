@@ -63,6 +63,8 @@ These bite almost every time:
 - **Statement dates are pure dates**, not datetimes: `"2026-04-01"`, not `"2026-04-01T00:00:00+03:00"`.
 - **SBP QR `amount` is in KOPECKS**, but `create-payment-link` `amount` is in RUBLES (float). 1500 ₽ = `150000` for SBP QR, `1500.00` for payment link.
 - **Invoice body — exact capitalisation matters**: `SecondSide` (capital S), `Content.Invoice.Positions`, `taxCode` (not `INN`), `quantity` (not `count`), `totalAmount` (not `amount`), `unitCode` with trailing dot (`"шт."`, not OKEI code), `ndsKind` ∈ `without_nds`/`nds_0`/`nds_5`/`nds_7`/`nds_10`/`nds_22` (**`nds_22` replaced `vat_20` from 2026**). Response → `Data.documentId` (not `documentUid` — removed).
+- **`unitCode` is a closed whitelist** — `шт. тыс.шт. компл. пар. усл.ед. упак. услуга. пач. мин. ч. сут. г. кг. л. м. м2. м3. км. га. кВт. кВт.ч.` (trailing dot included). **No `мес.`/`год.`** — for subscriptions use `услуга.` or `шт.` with the period inside the position name. `tochka_client.py` enforces this via argparse `choices`.
+- **Closing-doc `SecondSide` uses v1.0 lowercase fields** `kpp` / `secondSideName` — NOT the v2.0 invoice shape `KPP` / `legalName`. Tochka silently drops the v2.0 shape on closing-docs → buyer КПП missing in PDF → ЭДО rejects signing. Also: `Content.Act.totalAmount` is required at the block level, not just per-position. See [endpoints.md#closing-documents](references/endpoints.md#closing-documents-акты--упд--торг-12--счёт-фактура).
 - **Payment-order body is a flat `{"Data": {…fields…}}`**, not `Data.Payment: [...]` — otherwise the API returns `"Field X: Field required"` for every field.
 
 Error → fix cheatsheet (HTTP 501/403/401, OAuth callback timeouts, Keychain, PDF render): [references/errors.md](references/errors.md). Strategic caveats (no idempotency keys, Cyrillic enum values, divergence from Russian Central Bank Open Banking standards): [references/endpoints.md#operational-pitfalls](references/endpoints.md#operational-pitfalls).
@@ -82,7 +84,7 @@ python3 .claude/skills/tochka-bank-api/scripts/tochka_client.py create-invoice \
   --save-pdf ru/customers/acme/payments/ --format id
 ```
 
-`--document-number` is **required** on `create-invoice` / `create-closing-doc` — there's no auto-default. Use the flat per-customer counter (`max N + 1`). `--save-pdf DIR` auto-downloads the rendered PDF. For richer workflows, import the relevant `cmd_*` function from the script.
+`--document-number` is **required** on `create-invoice` / `create-closing-doc` — there's no auto-default. Use the flat per-customer counter (`max N + 1`). `--save-pdf DIR` auto-downloads the rendered PDF **and writes a JSON sidecar with the same basename** (`<filename>.json` next to `<filename>.pdf`) containing `documentId`, `customerCode`, document number/date, amount, buyer, parent-invoice id. This is the only durable cache of `documentId` — Tochka has no list endpoint, so without the sidecar the UUID has to be copied manually from online banking on every later operation. **Commit the sidecar together with the PDF.** For richer workflows, import the relevant `cmd_*` function from the script.
 
 ## Repo-level hook (Claude Code only)
 
