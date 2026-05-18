@@ -472,11 +472,12 @@ Body (swagger `ClosingDocumentCreateRequestModel`):
   "Data": {
     "customerCode": "100000001",
     "accountId": "40702810900000000001/044525225",
-    "SecondSide": {"taxCode": "7700000000", "KPP": "770001001", "type": "company", "legalName": "ООО \"Покупатель\""},
+    "SecondSide": {"taxCode": "7700000000", "kpp": "770001001", "type": "company", "secondSideName": "ООО \"Покупатель\""},
     "Content": {
       "Act": {
         "date": "2026-04-30",
         "number": "A-1",
+        "totalAmount": 50000,
         "Positions": [{"name": "Услуга", "price": 50000, "quantity": 1, "totalAmount": 50000, "unitCode": "шт.", "ndsKind": "without_nds"}]
       }
     },
@@ -486,6 +487,10 @@ Body (swagger `ClosingDocumentCreateRequestModel`):
 ```
 
 `Content` is a discriminated union — use one of: `Act` (акт выполненных работ), `PackingList` (товарная накладная ТОРГ-12), `Invoicef` (счёт-фактура), `Upd` (УПД). Position shape matches invoice `PositionModel` (same constraints). Optional `documentId` links the closing doc to a parent invoice so ЛК groups them in one thread.
+
+**⚠️ Critical v1.0 vs v2.0 shape differences (verified on prod 2026-04-21):**
+- **`SecondSide` uses lowercase `kpp` and `secondSideName`** — NOT the v2.0 invoice shape (`KPP` / `legalName`). If you send `KPP` here, Tochka silently drops it → buyer КПП missing in the rendered PDF → ЭДО signing fails with `"Не получилось подписать документ. Проверьте ИНН или КПП контрагента."` The doc still gets a `documentId` at creation time, so the bug only surfaces at signing.
+- **`Content.Act.totalAmount` is required** at the block level (not just inside each position). Missing it returns `400 Validation Error: Field Content-ContentAct-Act-totalAmount : Field required`.
 
 Helper subcommands: `create-closing-doc`, `get-closing-doc`, `send-closing-doc`, `delete-closing-doc`.
 

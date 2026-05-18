@@ -1091,6 +1091,7 @@ def _closing_doc_content(args: argparse.Namespace) -> dict:
     block = {
         "date": args.document_date,
         "number": args.document_number,
+        "totalAmount": args.amount,
         "Positions": [position],
     }
     # Discriminator — one of Act / PackingList / Invoicef / Upd.
@@ -1105,7 +1106,9 @@ def _closing_doc_content(args: argparse.Namespace) -> dict:
 
 def cmd_create_closing_doc(args: argparse.Namespace) -> None:
     """Create a closing document (act/УПД/ТОРГ-12/счёт-фактура) via /invoice/v1.0/closing-documents.
-    Same SecondSide shape as invoice. Optional --parent-invoice-id links to an invoice."""
+    SecondSide uses v1.0 lowercase field names (kpp, secondSideName) — NOT the v2.0 invoice shape
+    (KPP, legalName). Otherwise Tochka silently drops the fields → buyer KPP missing → ЭДО signing
+    fails with "Проверьте ИНН или КПП контрагента". Optional --parent-invoice-id links to an invoice."""
     customer_code = resolve_customer_code(args.customer_code)
     body: dict[str, Any] = {
         "Data": {
@@ -1114,13 +1117,13 @@ def cmd_create_closing_doc(args: argparse.Namespace) -> None:
             "SecondSide": {
                 "taxCode": args.buyer_inn,
                 "type": "company" if args.buyer_kpp else "ip",
-                "legalName": args.buyer_name,
+                "secondSideName": args.buyer_name,
             },
             "Content": _closing_doc_content(args),
         }
     }
     if args.buyer_kpp:
-        body["Data"]["SecondSide"]["KPP"] = args.buyer_kpp
+        body["Data"]["SecondSide"]["kpp"] = args.buyer_kpp
     if args.parent_invoice_id:
         body["Data"]["documentId"] = args.parent_invoice_id
 
