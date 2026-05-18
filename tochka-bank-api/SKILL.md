@@ -125,6 +125,7 @@ Full endpoint schemas, request/response shapes, validation rules: [references/en
 - **`paymentDate` must be ≤ today** — API rejects future dates.
 - **Statement dates are pure dates**, not datetimes: pass `"2026-04-01"`, not `"2026-04-01T00:00:00+03:00"`.
 - **Invoice body capitalisation**: `SecondSide` (capital S), `Content.Invoice.Positions`, `taxCode` (not `INN`), `quantity` (not `count`), `totalAmount` (not `amount`), `unitCode` with trailing dot (`"шт."`, not ОКЕИ code), `ndsKind` enum `without_nds`/`nds_0`/`nds_5`/`nds_7`/`nds_10`/`nds_22` — **`nds_22` replaced old 20% in 2026**. Old `vat_20` / `entrepreneur` rejected.
+- **`unitCode` is a closed whitelist**: only `шт.` `тыс.шт.` `компл.` `пар.` `усл.ед.` `упак.` `услуга.` `пач.` `мин.` `ч.` `сут.` `г.` `кг.` `л.` `м.` `м2.` `м3.` `км.` `га.` `кВт.` `кВт.ч.` are accepted (period included). **No `мес.` / `год.`** — for monthly/annual subscriptions use `услуга.` or `шт.` and put the period inside the position name. Anything else → `400 Validation Error: Field Content-…-Positions-0-unitCode : Input should be …`.
 - **Invoice response**: `Data.documentId` (not `documentUid` — removed).
 - **Payment-order body is a flat `{"Data": {...fields...}}`, not `Data.Payment: [...]`** — nested/array shape returns `"Field X: Field required"` for every field.
 
@@ -158,7 +159,7 @@ python3 .claude/skills/tochka-bank-api/scripts/tochka_client.py test-webhook    
 python3 .claude/skills/tochka-bank-api/scripts/tochka_client.py create-payment-link --amount 1000 --purpose "Оплата услуг по договору" --format url
 ```
 
-`--document-number` is **required** on `create-invoice` and `create-closing-doc` — no auto-default. Use the flat per-customer counter (highest N from `ru/customers/<slug>/payments/` + 1). `--save-pdf DIR` auto-downloads the rendered PDF.
+`--document-number` is **required** on `create-invoice` and `create-closing-doc` — no auto-default. Use the flat per-customer counter (highest N from `ru/customers/<slug>/payments/` + 1). `--save-pdf DIR` auto-downloads the rendered PDF **and writes a JSON sidecar with the same basename** (`<filename>.json` next to `<filename>.pdf`) containing `documentId`, `customerCode`, document number/date, amount, buyer, parent invoice id. This is the only durable record of the `documentId` — Tochka has no list endpoint, so without the sidecar the UUID has to be copied manually from ЛК. **Always commit the sidecars together with the PDF.**
 
 For richer workflows, import the relevant `cmd_*` function and adapt it.
 
@@ -190,6 +191,7 @@ Read-only subcommands (`list-*`, `get-*`, `config`, `init` validation) pass thro
 | `"Datetimes provided to dates should have zero time"` | full ISO datetime in statement date fields | pass `YYYY-MM-DD` only |
 | `"should be less than today or equal"` on payment | future-dated `paymentDate` | use today or earlier; for deferred send, submit draft and have user sign on target date |
 | `"forbidden symbols: —"` on payment purpose | U+2014 long dash | replace with `-` (hyphen) or `,` |
+| `Field …-Positions-0-unitCode : Input should be 'шт.', …` on invoice/closing-doc | unitCode outside the closed whitelist (e.g. `мес.`, `год.`, ОКЕИ code, no trailing dot) | use one from the whitelist — for subscriptions `услуга.` or `шт.` with period inside `name`. Helper now validates client-side via argparse `choices`. |
 | `"Проверьте номер счёта — в выбранном банке такого счёта нет"` | fake/typo counterparty reqs | counterparty account is validated against ЦБ registry — use real reqs |
 | `"Field X: Field required"` for every field on payment | nested `Data.Payment` instead of flat `Data.{...}` | flatten body — v2.0 schema is flat, not array/nested |
 | Invoice creation works but response lacks `documentUid` | looking at the wrong field | use `Data.documentId` (the `documentUid` alias was removed) |

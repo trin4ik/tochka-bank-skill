@@ -122,6 +122,16 @@ DEFAULT_OAUTH_PERMISSIONS = [
     # outside typical single-company automation scope. Add if needed later.
 ]
 
+# Closed whitelist for Positions[].unitCode (invoices and closing documents).
+# Anything outside this set returns 400 Validation Error from the API. Notable
+# absences: no monthly/yearly units — periodic subscriptions use "услуга." or
+# "шт.", with the period encoded in the position name. Verified prod 2026-05-08.
+VALID_UNIT_CODES = [
+    "шт.", "тыс.шт.", "компл.", "пар.", "усл.ед.", "упак.", "услуга.",
+    "пач.", "мин.", "ч.", "сут.", "г.", "кг.", "л.", "м.", "м2.", "м3.",
+    "км.", "га.", "кВт.", "кВт.ч.",
+]
+
 
 def base_url() -> str:
     if os.environ.get("TOCHKA_SANDBOX") == "1":
@@ -1038,6 +1048,21 @@ def cmd_create_invoice(args: argparse.Namespace) -> None:
         pdf_bytes = _invoice_get_pdf(customer_code, document_id)
         pdf_path.write_bytes(pdf_bytes)
         print(f"Saved {len(pdf_bytes)} bytes.", file=sys.stderr)
+        meta_path = _save_meta(pdf_path, {
+            "documentId": document_id,
+            "kind": "invoice",
+            "customerCode": customer_code,
+            "documentNumber": args.document_number,
+            "documentDate": args.document_date,
+            "amount": args.amount,
+            "ndsKind": args.nds_kind,
+            "buyer": {
+                "taxCode": args.buyer_inn,
+                "kpp": args.buyer_kpp,
+                "name": args.buyer_name,
+            },
+        })
+        print(f"Saved meta → {meta_path}", file=sys.stderr)
 
 
 def cmd_send_invoice(args: argparse.Namespace) -> None:
@@ -1076,6 +1101,23 @@ def _save_pdf(pdf_bytes: bytes, target_dir: str, doc_kind: str, number: str, dat
     p = out_dir / filename
     p.write_bytes(pdf_bytes)
     return p
+
+
+def _save_meta(pdf_path: Path, payload: dict[str, Any]) -> Path:
+    """Write a JSON sidecar next to PDF — same basename, .json extension.
+
+    Tochka has no GET-list endpoint for invoices/closing-docs, so we cache the
+    `documentId` (and minimal context) on disk at creation time. Without this
+    sidecar, finding a document later requires manually opening it in ЛК Точки
+    to copy the UUID from the URL.
+    """
+    payload = {**payload, "createdAt": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
+    meta_path = pdf_path.with_suffix(".json")
+    meta_path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return meta_path
 
 
 def _closing_doc_content(args: argparse.Namespace) -> dict:
@@ -1150,6 +1192,22 @@ def cmd_create_closing_doc(args: argparse.Namespace) -> None:
         )
         p = _save_pdf(pdf_bytes, args.save_pdf, kind_label, args.document_number, args.document_date)
         print(f"Saved PDF → {p} ({len(pdf_bytes)} bytes)", file=sys.stderr)
+        meta_path = _save_meta(p, {
+            "documentId": document_id,
+            "kind": args.kind,
+            "customerCode": customer_code,
+            "documentNumber": args.document_number,
+            "documentDate": args.document_date,
+            "amount": args.amount,
+            "ndsKind": args.nds_kind,
+            "parentInvoiceId": args.parent_invoice_id,
+            "buyer": {
+                "taxCode": args.buyer_inn,
+                "kpp": args.buyer_kpp,
+                "name": args.buyer_name,
+            },
+        })
+        print(f"Saved meta → {meta_path}", file=sys.stderr)
 
 
 def cmd_get_closing_doc(args: argparse.Namespace) -> None:
@@ -1386,7 +1444,11 @@ def main() -> None:
     p_inv.add_argument(
         "--unit-code",
         default="шт.",
-        help="Единица измерения (обязательно с точкой: шт., кг., л., м., услуга. и т.д.)",
+        choices=VALID_UNIT_CODES,
+        metavar="UNIT",
+        help="Единица измерения. Закрытый whitelist Точки (нет 'мес.' / 'год.' — "
+             "для подписок используй 'услуга.' или 'шт.'). Допустимо: "
+             + ", ".join(VALID_UNIT_CODES),
     )
     p_inv.add_argument(
         "--save-pdf",
@@ -1425,7 +1487,10 @@ def main() -> None:
                       help="documentId родительского счёта-оферты (опц.) — свяжет документы в ЛК")
     p_cd.add_argument("--nds-kind", default="without_nds",
                       choices=["without_nds", "nds_0", "nds_5", "nds_7", "nds_10", "nds_22"])
-    p_cd.add_argument("--unit-code", default="шт.")
+    p_cd.add_argument("--unit-code", default="шт.", choices=VALID_UNIT_CODES, metavar="UNIT",
+                      help="Единица измерения. Закрытый whitelist Точки (нет 'мес.' / 'год.' — "
+                           "для подписок используй 'услуга.' или 'шт.'). Допустимо: "
+                           + ", ".join(VALID_UNIT_CODES))
     p_cd.add_argument("--save-pdf", default=None, metavar="DIR",
                       help="Сразу скачать PDF в папку DIR. Имя: '<Тип> №<номер> от DD.MM.YYYY.pdf'")
     p_cd.add_argument(
