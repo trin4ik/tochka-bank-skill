@@ -26,7 +26,7 @@ Python CLI (только стандартная библиотека) + стру
 - **Интерактивные визарды** `init` и `init --oauth` с проверкой TTY, подсказками по регистрации приложения и локальным HTTPS-callback сервером (поддерживает mkcert)
 - **Флаг `--format {json,id,url}`** у команд `create-*` — получить только ID или URL в stdout для shell-пайплайнов, без `jq`
 - **Опциональный хук подтверждения для Claude Code** — permission-prompt с метками `[PROD]` / `[SANDBOX]` перед каждым изменяющим вызовом
-- **Offline OpenAPI-спека** (OpenAPI 3.1.0, Tochka.API v1.90.4-stable, 447 КБ) для поиска схем через `jq`
+- **Offline OpenAPI-спека** (OpenAPI 3.1.0, Tochka.API v1.90.4-stable, 440 КБ в `schemas/`) для поиска схем через `jq`
 
 ### Референсная библиотека
 
@@ -36,7 +36,8 @@ Python CLI (только стандартная библиотека) + стру
 | `references/auth.md` | JWT и OAuth flows, полный список 19 разрешений, устройство визардов, подводные камни регистрации приложения (включая баг `localhost` vs `127.0.0.1`) |
 | `references/endpoints.md` | Схемы всех 19+ эндпоинтов, правила валидации, различия полей для ИП vs ООО |
 | `references/webhooks.md` | Верификация подписи через OIDC discovery, retry semantics, идемпотентность |
-| `references/swagger.json` | Offline OpenAPI 3.1.0 спека. Источник: `https://enter.tochka.com/doc/openapi/swagger.json` |
+| `references/errors.md` | Шпаргалка error → fix (HTTP 501/403/401, OAuth callback, Keychain, PDF render) |
+| `schemas/swagger.json` | Offline OpenAPI 3.1.0 спека (440K). Источник: `https://enter.tochka.com/doc/openapi/swagger.json`. Читать через `jq`, не загружать в контекст. |
 
 ## Установка
 
@@ -48,7 +49,7 @@ npx skills add rodion-m/tochka-bank-skill@tochka-bank-api -g -y
 
 ### Вручную
 
-Скопируйте директорию `tochka-bank-api/` (с `SKILL.md`, `references/`, `scripts/`, `hooks/`) в папку скиллов вашего агента:
+Скопируйте директорию `tochka-bank-api/` (с `SKILL.md`, `references/`, `schemas/`, `scripts/`, `hooks/`) в папку скиллов вашего агента:
 
 | Агент | Путь |
 |-------|------|

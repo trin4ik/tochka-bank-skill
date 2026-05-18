@@ -2,14 +2,6 @@
 
 Real-time event delivery from Tochka to your server. Strongly recommended over polling for incoming-payment notifications.
 
-## Table of Contents
-
-- [Setting up a webhook URL](#setting-up-a-webhook-url)
-- [Available events](#available-events)
-- [Request format](#request-format)
-- [Verifying the signature](#verifying-the-signature)
-- [Idempotency and retries](#idempotency-and-retries)
-
 ## Setting up a webhook URL
 
 In online banking → **Интеграции и API** → existing JWT/OAuth integration → set webhook URL. The URL must:

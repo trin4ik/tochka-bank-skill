@@ -1,61 +1,21 @@
 #!/usr/bin/env python3
-"""Minimal Tochka Bank API client for common CLI tasks (verified against prod 2026-04-20).
+"""Tochka Bank API client (stdlib-only, verified prod 2026-04-20).
 
-First-time setup: `init` (personal JWT) or `init --oauth` (OAuth 2.0 + Consent).
-Base URL defaults to production; set TOCHKA_SANDBOX=1 for sandbox.
+Setup: `init` (personal JWT) or `init --oauth` (OAuth 2.0 + Consent).
+Sandbox: TOCHKA_SANDBOX=1.
 
-Auth & storage:
-  Personal JWT — generated once in ЛК Точки, validated on `init`, stored in OS
-  credential store (macOS Keychain / secret-tool / Credential Manager) with file
-  fallback. OAuth — `init --oauth` runs the full client_credentials + consent +
-  authorization_code flow, starts a local HTTPS callback, and stores client_id /
-  client_secret / refresh_token / access_token in Keychain. access_token is
-  auto-refreshed by `request()` when near expiry.
-
-Token resolution order (for `request()`):
+Token resolution (in `request()`):
   1. $TOCHKA_TOKEN env var
-  2. auth_mode == "oauth" → access_token from keychain (refreshed when needed)
-  3. OS credential store (service `tochka-bank-api-token`)
-  4. ~/.config/tochka-bank-api/token (last-resort, chmod 600)
+  2. OAuth access_token from Keychain (auto-refreshed near expiry, if auth_mode=oauth)
+  3. OS credential store (service `tochka-bank-api-token`)  — personal JWT
+  4. ~/.config/tochka-bank-api/token (chmod 600 fallback)
 
-Subcommands (grouped by auth tier):
+19 subcommands (`--help` on each for flags). State-changing ones are gated by
+the repo hook `.claude/hooks/tochka-require-confirmation.sh` (Claude Code prompt).
 
-  Setup & introspection
-    init [--oauth] [--storage keychain|file] [--redirect-url URL]
-    config                            Show resolved defaults
-    list-accounts                     All accounts the token can see
-    list-consents / get-consent ID    (OAuth only) introspect consent scopes
-
-  Reading — personal JWT OK
-    list-incoming [--status S]        Acquiring / SBP incoming
-    list-for-sign [--status S]        Outgoing drafts in «На подпись»
-    get-balance [--account-id ID]     Current balance
-    list-registry --date YYYY-MM-DD   Daily acquiring settlement rollup
-
-  Reading — OAuth-only on prod (501 under personal JWT)
-    list-statement --from D1 --to D2  Full bank statement (Open Banking async flow)
-
-  Writing — OAuth-only on prod
-    create-invoice --amount N --purpose P --buyer-inn I --buyer-name N [--buyer-kpp K]
-                   [--nds-kind ...] [--unit-code шт.] [--save-pdf DIR]
-    send-invoice --invoice-id DOC_ID --email EMAIL
-    create-closing-doc --kind act|packing-list|invoicef|upd --document-number N ...
-    get-/send-/delete-closing-doc --document-id DOC_ID ...
-
-  Writing — personal JWT (with specific permissions) or OAuth
-    create-payment-link --amount N --purpose P [--payment-mode sbp card]
-                        [--pre-authorization] [--ttl N]
-    register-webhook --url HTTPS_URL [--events ...]   (JWT or OAuth)
-    list-/test-/delete-webhook
-
-Safety: state-changing subcommands are gated by the repo-level hook
-`.claude/hooks/tochka-require-confirmation.sh` — Claude Code prompts for
-confirmation before each. Read-only calls pass through.
-
-All paths use v2.0 where the bank offers it (Open Banking, Acquiring, Payment,
-SBP); Invoice API mixes v1.0 (file / email / payment-status) and v2.0 (create).
-Closing documents are v1.0 only. Always confirm field names against live ReDoc:
-  https://enter.tochka.com/doc/v2/redoc
+All paths use v2.0 where the bank offers it; Invoice API mixes v1.0/v2.0,
+closing docs are v1.0 only. Live ReDoc is the source of truth for shapes:
+https://enter.tochka.com/doc/v2/redoc
 """
 
 from __future__ import annotations
